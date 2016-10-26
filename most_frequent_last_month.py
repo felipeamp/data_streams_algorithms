@@ -18,29 +18,31 @@ def main():
     most_common_by_date = {} # most_common_by_date[date_str][time_str] = list of k most common str
     values_of_last_month = collections.deque(maxlen=NUM_VALUES_IN_MONTH)
     is_header = True
-    with gzip.open(DATASET_PATH, 'r') as fin:
-        for line in fin:
-            if is_header:
-                is_header = False
-                continue
-            date_str, time_str, value, _, _, _, _, _, _ = line.decode('ascii').split(';')
-            if value == '?':
-                values_of_last_month.popleft()
-                continue
-            date_str_reversed = reverse_date(date_str)
-            rounded_value = get_rounded_value(value)
-            values_of_last_month.append(rounded_value)
-            # if len(values_of_last_month) < values_of_last_month.maxlen:
-            #     continue
-            if date_str_reversed not in most_common_by_date:
-                most_common_by_date[date_str_reversed] = {}
-            current_most_frequent = calculate_frequent(list(values_of_last_month))
-            most_common_by_date[date_str_reversed][time_str] = current_most_frequent
-    if OUTPUT_FILE is not None:
-        with open(OUTPUT_FILE, 'w')as fout:
-            print_answers(most_common_by_date, fout=fout)
-    else:
-        print_answers(most_common_by_date, fout=sys.stdout)
+    try:
+        with gzip.open(DATASET_PATH, 'r') as fin:
+            for line in fin:
+                if is_header:
+                    is_header = False
+                    continue
+                date_str, time_str, value, _, _, _, _, _, _ = line.decode('ascii').split(';')
+                if value == '?':
+                    values_of_last_month.popleft()
+                    continue
+                date_str_reversed = reverse_date(date_str)
+                rounded_value = get_rounded_value(value)
+                values_of_last_month.append(rounded_value)
+                # if len(values_of_last_month) < values_of_last_month.maxlen:
+                #     continue
+                if date_str_reversed not in most_common_by_date:
+                    most_common_by_date[date_str_reversed] = {}
+                current_most_frequent = calculate_frequent(list(values_of_last_month))
+                most_common_by_date[date_str_reversed][time_str] = current_most_frequent
+    finally:
+        if OUTPUT_FILE is not None:
+            with open(OUTPUT_FILE, 'a')as fout:
+                print_answers(most_common_by_date, fout=fout)
+        else:
+            print_answers(most_common_by_date, fout=sys.stdout)
 
 def reverse_date(date_str):
     day, month, year = date_str.split('/')
