@@ -16,8 +16,8 @@ def main():
         
     exact_sn = calc_surprise_number(dataset_filename, method = 'exact')
     ans_sn = calc_surprise_number(dataset_filename, method = 'ans')
-    print('Surprise number (exact method) = '.format(exact_sn))
-    print('Surprise number (ans method) = '.format(ans_sn))
+    print('Surprise number (exact method) = {}'.format(exact_sn))
+    print('Surprise number (Alon-Matias-Szegedy method) = {}'.format(ans_sn))
 
 def download_dataset(dataset_path = os.getcwd() + '/datasets'):
     """This function downloads the input dataset to the given path.
