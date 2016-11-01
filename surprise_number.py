@@ -22,9 +22,16 @@ def main():
         print('Dataset locally present.')
 
     exact_sn = calc_surprise_number_exact(dataset_filename)
-    ans_sn = calc_surprise_number_ams(dataset_filename, [0.1, 0.2, 0.3, 0.4, 0.5])
+    ans_sn = calc_surprise_number_ams(dataset_filename, [x/100 for x in range(1, 100)])
+
     print('Surprise number (exact method) = {}'.format(exact_sn))
-    print('Surprise number (Alon-Matias-Szegedy method) = {}'.format(ans_sn))
+    print('Surprise numbers estimated using the ANS algorithm.')
+    for sn in ans_sn:
+        print('Surprise number using {} of the values as variables = {}'.format(sn[1]))
+    
+    for sn in ans_sn:
+        perc = sn[0] * 100
+        print('Ratio of exact SN and AMS SN using {} of the values as variables = {}'.format(perc, exact_sn / sn[1]))
 
 
 def download_dataset(dataset_path=os.getcwd() + '/datasets'):
@@ -80,7 +87,7 @@ def calc_surprise_number_exact(dataset_filename):
 
     return surprise_number
 
-def calc_surprise_number_ams(dataset_filename, perc_num_variables):
+def calc_surprise_number_ams(dataset_filename, num_variables, sample_size):
     """
     This function estimates the 2nd moment of a dataset (a.k.a. surprise number)
     using the Alon-Matias-Szegedy (AMS) algorithm.
@@ -88,9 +95,9 @@ def calc_surprise_number_ams(dataset_filename, perc_num_variables):
     Parameters:
     dataset_filename -- The full path to the dataset file. This file is expected
     to be in txt.gz format.
-    perc_num_variables -- A list containing the percentage of words to be
-    classified as variables by the algorithm. Each element in this list must in
-    range [0.0, 1.0).
+    num_variables -- The number of variables to be chosen by the algorithm.
+    sample_size -- The size of the sample to be used in the reservoir sampling
+    algorithm. This number must be smaller than the size of the dataset.
 
     Returns:
     """
@@ -115,15 +122,14 @@ def calc_surprise_number_ams(dataset_filename, perc_num_variables):
                             num_variables)
 
         surprise_numbers = []
-        for n in range(num_variables):
-            _, _, count = file_contents[var[n]].split(' ')
+        for curr_var in range(num_variables):
+            _, _, count = file_contents[var[curr_var]].split(' ')
             count = int(count)
             ams = num_words * (2 * count - 1)
             surprise_numbers.append(ams)
 
-        estimated_sn = sum(surprise_numbers) / float(len(surprise_numbers))
-        avg_surprise_numbers.append(estimated_sn)
-        print('Estimated surprise number using {} values = {}'.format(num_variables, estimated_sn))
+        estimated_sn = sum(surprise_numbers) / float(num_variables)
+        avg_surprise_numbers.append((perc, estimated_sn))
 
     return avg_surprise_numbers
 
