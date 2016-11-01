@@ -1,27 +1,33 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-import collections
+"""
+2nd moments calculation using and exact method and the Alon-Matias-Szegedy (AMS) algorithm.
+"""
+
 import gzip
 import os
 import urllib.request
 import random
-import math
 
 def main():
+    """
+    Main function. Calls the 2nd moment calculation functions and analyzes the
+    resulting values and time metrics.
+    """
     downloaded, dataset_filename = download_dataset()
     if downloaded:
         print('Dataset downloaded.')
     else:
         print('Dataset locally present.')
-        
-    #exact_sn = calc_surprise_number_exact(dataset_filename)
+
+    exact_sn = calc_surprise_number_exact(dataset_filename)
     ans_sn = calc_surprise_number_ams(dataset_filename, [0.1, 0.2, 0.3, 0.4, 0.5])
-    #print('Surprise number (exact method) = {}'.format(exact_sn))
+    print('Surprise number (exact method) = {}'.format(exact_sn))
     print('Surprise number (Alon-Matias-Szegedy method) = {}'.format(ans_sn))
 
 
-def download_dataset(dataset_path = os.getcwd() + '/datasets'):
+def download_dataset(dataset_path=os.getcwd() + '/datasets'):
     """
     This function downloads the input dataset to the given path.
 
@@ -37,11 +43,11 @@ def download_dataset(dataset_path = os.getcwd() + '/datasets'):
     """
     downloaded = False
     dataset_filename = dataset_path + '/nytimes.txt.gz'
-    if (os.path.exists(dataset_filename) == False or os.path.isfile(dataset_filename) == False):
+    if os.path.exists(dataset_filename) is False or os.path.isfile(dataset_filename) is False:
         print('Downloading dataset.')
         url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/bag-of-words/docword.nytimes.txt.gz'
-        urllib.request.urlretrieve(url = url,
-                                   filename = dataset_filename)
+        urllib.request.urlretrieve(url=url,
+                                   filename=dataset_filename)
         downloaded = True
     return downloaded, dataset_filename
 
@@ -64,19 +70,20 @@ def calc_surprise_number_exact(dataset_filename):
     """
     surprise_number = 0
     with gzip.open(dataset_filename, 'r') as file_input:
-        num_docs = int(file_input.readline().decode('ascii').split('=')[0])
-        num_unique_words = int(file_input.readline().decode('ascii').split('=')[0])
-        num_words = int(file_input.readline().decode('ascii').split('=')[0])
+        _ = int(file_input.readline().decode('ascii').split('=')[0])
+        _ = int(file_input.readline().decode('ascii').split('=')[0])
+        _ = int(file_input.readline().decode('ascii').split('=')[0])
 
         for line in file_input:
-            doc_id, word_id, count = line.decode('ascii').split(' ')
+            _, _, count = line.decode('ascii').split(' ')
             surprise_number = surprise_number + int(count) ** 2
-                
+
     return surprise_number
 
 def calc_surprise_number_ams(dataset_filename, perc_num_variables):
     """
-    This function estimates the 2nd moment of a dataset (a.k.a. surprise number) using the Alon-Matias-Szegedy (AMS) algorithm.
+    This function estimates the 2nd moment of a dataset (a.k.a. surprise number)
+    using the Alon-Matias-Szegedy (AMS) algorithm.
 
     Parameters:
     dataset_filename -- The full path to the dataset file. This file is expected
@@ -94,28 +101,31 @@ def calc_surprise_number_ams(dataset_filename, perc_num_variables):
         file_contents = file_input.readlines()
 
     # Decoding the lines of the file.
-    decoded_file = []
-    for line in file_contents:
-        decoded_file.append(line.decode('ascii'))
-    file_contents = None
+    for line_idx, line in enumerate(file_contents):
+        file_contents[line_idx] = line.decode('ascii')
 
-    num_unique_words = int(decoded_file[1])
-    num_words = int(decoded_file[2])
-    for p in perc_num_variables:
-        num_variables = int(p * num_unique_words)
+    num_unique_words = int(file_contents[1])
+    num_words = int(file_contents[2])
+    avg_surprise_numbers = []
+    for perc in perc_num_variables:
+        num_variables = int(perc * num_unique_words)
         # The +3 factor is due to the fact that the file header is composed of 3
         # lines and we don't want them being picked by our sampling.
-        indices = list(range(3, num_unique_words + 3))
-        X = random.sample(indices,
-                          num_variables)
+        var = random.sample(list(range(3, num_unique_words + 3)),
+                            num_variables)
 
         surprise_numbers = []
-        for n in num_variables:
-            ams = num_words * (2 * decoded_files[X[n]] - 1)
+        for n in range(num_variables):
+            _, _, count = file_contents[var[n]].split(' ')
+            count = int(count)
+            ams = num_words * (2 * count - 1)
             surprise_numbers.append(ams)
 
-        print('Estimated surprise number using {} values = {}'.format(num_variables, sum(surprise_numbers) / float(len(surprise_numbers))))
+        estimated_sn = sum(surprise_numbers) / float(len(surprise_numbers))
+        avg_surprise_numbers.append(estimated_sn)
+        print('Estimated surprise number using {} values = {}'.format(num_variables, estimated_sn))
+
+    return avg_surprise_numbers
 
 if __name__ == '__main__':
     main()
-    
