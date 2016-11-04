@@ -27,7 +27,7 @@ def main():
         print('Dataset locally present.')
 
     #exact_sn = calc_surprise_number_exact(dataset_filename)
-    ans_sn = calc_surprise_number_ams(dataset_filename, 10)
+    ans_sn = calc_surprise_number_ams(dataset_filename, 100)
 
     #print('Surprise number (exact method) = {}'.format(exact_sn))
     #print('Surprise numbers estimated using the ANS algorithm.')
@@ -152,7 +152,7 @@ def calc_surprise_number_ams(dataset_filename, sample_size):
                 # counter dict and the samples dict, else, we add another
                 # counter to the count dict and increment all counters in the
                 # token dict inside the samples dict.
-                if not (token in count_dict):
+                if token not in count_dict:
                     count_dict[token] = 1
                     sample_dict[token] = {0: 1}
                 else:
@@ -179,12 +179,15 @@ def calc_surprise_number_ams(dataset_filename, sample_size):
                         del(to_del)
 
                     ## Adding the new element to the sample.
-                    if token in sample_dict:
-                        pass
+                    if token not in sample_dict:
+                        count_dict[token] = 1
+                        sample_dict[token] = {0: 1}
                     else:
-                        pass
-                    
-            
+                        for k, v in sample_dict[token].items():
+                            sample_dict[token][k] = v + 1
+                        sample_dict[token][count_dict[token]] = 1
+                        count_dict[token] = count_dict[token] + 1
+
             stream_elements_visited = stream_elements_visited + 1
 
 
