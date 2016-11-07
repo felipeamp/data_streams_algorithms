@@ -10,6 +10,7 @@ import os
 import random
 import re
 import string
+import timeit
 import numpy as np
 import urllib.request
 
@@ -63,6 +64,23 @@ def download_dataset(url, filename, dataset_path=os.getcwd() + '/datasets'):
         downloaded = True
     return downloaded, dataset_filename
 
+def get_word_count_dict(dataset_filename):
+    """
+    This function builds a dictionary with the dataset's tokens and the number
+    of occurences of each token.
+
+    A token is defined by a lowercase word. Punctuation and whitespaces are
+    excluded.
+
+    Arguments:
+    dataset_filename -- The full path to the dataset file. This file is
+    expected to be in .zip format.
+
+    Returns:
+    word_dict -- A dictionary with the dataset's tokens as keys and their number
+    of ocurrences as values.
+    """
+    pass
 
 def calc_surprise_number_exact(dataset_filename):
     """
@@ -111,7 +129,7 @@ def calc_surprise_number_exact(dataset_filename):
 
     return surprise_number
 
-def calc_surprise_number_ams(dataset_filename, sample_size):
+def calc_surprise_number_ams(dataset_filename, sample_size, num_vars):
     """
     This function estimates the 2nd moment of a dataset (a.k.a. surprise number)
     using the Alon-Matias-Szegedy (AMS) algorithm.
@@ -119,8 +137,12 @@ def calc_surprise_number_ams(dataset_filename, sample_size):
     Parameters:
     dataset_filename -- The full path to the dataset file. This file is expected
     to be in txt.gz format.
+    
     sample_size -- The size of the sample to be used in the reservoir sampling
     algorithm. This number must be smaller than the size of the dataset.
+    
+    num_vars -- The number of variables to select from the sample in order to
+    estimate the 2nd moment of the dataset.
 
     Returns:
     """
@@ -138,13 +160,19 @@ def calc_surprise_number_ams(dataset_filename, sample_size):
     count_dict = {}
     stream_elements_visited = 0
 
+    start_time = timeit.default_timer()
     for line_idx, line in enumerate(file_contents):
-        print("Processing line {}/{}".format(line_idx, len(file_contents)))
-        # Splitting the line by punctuation and whitespace characters.
+        # TODO(gschardong): Remove this later
+        if line_idx > 10000:
+            break
+
+        # Splitting a lowercase version of the line by punctuation and
+        # whitespace characters.
         split_line = re.split('[' + string.punctuation + string.whitespace + ']',
-                              line)
+                              line.lower())
         split_line = list(filter(None, split_line))
-        for token in split_line:
+        chance_to_remove_token = np.random.rand(len(split_line))
+        for token_idx, token in enumerate(split_line):
             # If the number of stream elements visited is less than the sample
             # size, the element is automatically included in the samples
             # dictionary.
@@ -162,7 +190,7 @@ def calc_surprise_number_ams(dataset_filename, sample_size):
                     sample_dict[token][count_dict[token]] = 1
                     count_dict[token] = count_dict[token] + 1
             else:
-                if random.random() > sample_size / stream_elements_visited:
+                if chance_to_remove_token[token_idx] > sample_size / stream_elements_visited:
                     # If the random number generator returns a value larger
                     # than sample_size / N, then we must add the new stream
                     # element to our sample. Since our sample is full, we must
@@ -190,8 +218,15 @@ def calc_surprise_number_ams(dataset_filename, sample_size):
                         sample_dict[token][count_dict[token]] = 1
                         count_dict[token] = count_dict[token] + 1
 
+            # Calculating the 2nd moment of the sample
+            
             stream_elements_visited = stream_elements_visited + 1
+            
+        if (line_idx % 1000) == 0:
+            print("Processed line {}/{}".format(line_idx, len(file_contents)))
 
+    end_time = timeit.default_timer() - start_time
+    print("End time = {} s".format(end_time))
 
 if __name__ == '__main__':
     main()
