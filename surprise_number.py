@@ -138,7 +138,8 @@ def calc_surprise_number_ams(dataset_filename, sample_size):
     count_dict = {}
     stream_elements_visited = 0
 
-    for line in file_contents:
+    for line_idx, line in enumerate(file_contents):
+        print("Processing line {}/{}".format(line_idx, len(file_contents)))
         # Splitting the line by punctuation and whitespace characters.
         split_line = re.split('[' + string.punctuation + string.whitespace + ']',
                               line)
@@ -168,8 +169,9 @@ def calc_surprise_number_ams(dataset_filename, sample_size):
                     # choose an element to remove from it. To remove an element,
                     # we choose one uniformly at random, remove it and add the
                     # new element to our sample set.
+                    sum_count_dict = sum(count_dict.values())
                     elem = np.random.choice(a=list(sample_dict.keys()),
-                                            p=[len(v.keys()) / sum(count_dict.values()) for _, v in sample_dict.items()],
+                                            p=[len(v.keys()) / sum_count_dict for _, v in sample_dict.items()],
                                             replace=False)
                     if len(sample_dict[elem]) == 1:
                         del(sample_dict[elem])
