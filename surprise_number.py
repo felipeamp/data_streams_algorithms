@@ -7,12 +7,11 @@
 
 import zipfile
 import os
-import random
 import re
 import string
 import timeit
-import numpy as np
 import urllib.request
+import numpy as np
 
 def main():
     """
@@ -27,11 +26,13 @@ def main():
     else:
         print('Dataset locally present.')
 
-    exact_sn = calc_surprise_number_exact(dataset_filename, True)
-    ans_sn = calc_surprise_number_ams(dataset_filename, 100)
+    dataset = tokenize_dataset(dataset_filename)
+
+    exact_sn = calc_surprise_number_exact(dataset[1:300], True)
+    ans_sn = calc_surprise_number_ams(dataset[1:300], 50, True)
 
     print('Surprise number (exact method) = {}'.format(exact_sn))
-    print('Surprise numbers estimated using the ANS algorithm.')
+    print('Surprise number estimated using the ANS algorithm = {}'.format(ans_sn))
     #for sn in ans_sn:
     #    print('Surprise number using {} of the values as variables = {}'.format(sn[1]))
     #for sn in ans_sn:
@@ -64,7 +65,35 @@ def download_dataset(url, filename, dataset_path=os.getcwd() + '/datasets'):
         downloaded = True
     return downloaded, dataset_filename
 
-def get_word_count_dict(dataset_filename):
+def tokenize_dataset(dataset_filename):
+    """
+    This function opens the dataset file, reads it line-by-line and splits each
+    line by punctuation and whitespaces, returning a list of lists of tokens.
+
+    Arguments:
+    dataset_filename -- The full path to the dataset in zip format.
+
+    Returns:
+    lines_list -- A list of lines, where each line is a list of strings split
+    by whitespace and punctuation characters.
+    """
+    file_contents = []
+    with zipfile.ZipFile(dataset_filename, 'r').open('Norvig.txt', 'r') as file_input:
+        file_contents = file_input.readlines()
+
+    for line_idx, line in enumerate(file_contents):
+        file_contents[line_idx] = line.decode('ascii')
+
+    lines_list = []
+    for line in file_contents:
+        split_line = re.split('[' + string.punctuation + string.whitespace + ']',
+                              line.lower())
+        split_line = list(filter(None, split_line))
+        lines_list.append(split_line)
+
+    return lines_list
+
+def get_token_count_dict(dataset):
     """
     This function builds a dictionary with the dataset's tokens and the number
     of occurences of each token.
@@ -73,40 +102,34 @@ def get_word_count_dict(dataset_filename):
     excluded.
 
     Arguments:
-    dataset_filename -- The full path to the dataset file. This file is
-    expected to be in .zip format.
+    dataset -- A list of lines. Each sublist is contains the words of that line.
+    These words will be used as keys in the resulting dictionary.
 
     Returns:
+    A boolean value indicating if the operation was successful.
     word_dict -- A dictionary with the dataset's tokens as keys and their number
-    of ocurrences as values.
+    of ocurrences as values. If the operation failed and empty dictionary is
+    returned.
     """
-    file_contents = []
-    with zipfile.ZipFile(dataset_filename, 'r').open('Norvig.txt', 'r') as file_input:
-        file_contents = file_input.readlines()
-
-    # Decoding the file's contents line-by-line.
-    for line_idx, line in enumerate(file_contents):
-        file_contents[line_idx] = line.decode('ascii')
+    if len(dataset) == 0:
+        return False, {}
 
     ## Building the word dictionary.
     token_dict = {}
-    for line in file_contents:
+    for line in dataset:
         ## Splitting the line by punctuation and whitspace characters, however,
         ## some empty strings are returned, thus the call to the 'filter'
         ## function.
-        split_line = re.split('[' + string.punctuation + string.whitespace + ']',
-                              line.lower())
-        split_line = list(filter(None, split_line))
-        for token in split_line:
+        for token in line:
             if token in token_dict:
                 token_dict[token] = token_dict[token] + 1
             else:
                 token_dict[token] = 1
 
-    return token_dict
+    return True, token_dict
 
 
-def calc_surprise_number_exact(dataset_filename, measure_performance = False):
+def calc_surprise_number_exact(dataset, measure_performance=False):
     """
     This function calculates the exact surprise number of a dataset.
     The surprise number is defined as the second moment of a set. The exact way
@@ -116,8 +139,7 @@ def calc_surprise_number_exact(dataset_filename, measure_performance = False):
     since the whole dataset must be transversed.
 
     Arguments:
-    dataset_filename -- The full path to the dataset file. This file is expected
-    to be in .zip format.
+    dataset -- A list of lines. Each sublist is contains the words of that line.
 
     measure_performance -- Switch to indicate if the time to calculate the 2nd
     moment should be measured. If set to True, the resulting time is returned
@@ -126,69 +148,58 @@ def calc_surprise_number_exact(dataset_filename, measure_performance = False):
     Returns:
     The 2nd moment, a.k.a. surprise number, of the dataset. And the time it took
     to calculate the surprise number (if the measure_performance parameter is
-    set to True).
+    set to True). If the operation failed, then the surprise number returned will
+    be -1 and the measured time will be returned as None, regardless of the
+    measure_performance parameter value.
     """
-    token_dict = get_word_count_dict(dataset_filename)
-    start_time = timeit.default_timer()
+    success, token_dict = get_token_count_dict(dataset)
+    if not success:
+        return -1, None
 
+    start_time = timeit.default_timer()
+    
     surprise_number = 0
     for _, count in token_dict.items():
-        surprise_number = surprise_number + count ** 2
+        surprise_number = surprise_number + (count ** 2)
 
     end_time = timeit.default_timer() - start_time
 
     return surprise_number, end_time if measure_performance else None
 
-def calc_surprise_number_ams(dataset_filename, sample_size, num_vars):
+def calc_surprise_number_ams(dataset, sample_size, measure_performance=False):
     """
     This function estimates the 2nd moment of a dataset (a.k.a. surprise number)
     using the Alon-Matias-Szegedy (AMS) algorithm.
 
-    Parameters:
-    dataset_filename -- The full path to the dataset file. This file is expected
-    to be in txt.gz format.
-    
+    Arguments:
+    dataset -- A list of lines. Each sublist is contains the words of that line.
+
     sample_size -- The size of the sample to be used in the reservoir sampling
     algorithm. This number must be smaller than the size of the dataset.
-    
-    num_vars -- The number of variables to select from the sample in order to
-    estimate the 2nd moment of the dataset.
+
+    measure_performance -- Switch to indicate if the time to calculate the 2nd
+    moment should be measured. If set to True, the resulting time is returned
+    following the surprise number. The default value is False.
 
     Returns:
     """
-
-    # Since the file is small, we read it into the memory.
-    file_contents = []
-    with zipfile.ZipFile(dataset_filename, 'r').open('Norvig.txt', 'r') as file_input:
-        file_contents = file_input.readlines()
-
-    # Decoding the file's contents line-by-line.
-    for line_idx, line in enumerate(file_contents):
-        file_contents[line_idx] = line.decode('ascii')
+    token_count = sum(get_token_count_dict(dataset)[1].values())
 
     sample_dict = {}
     count_dict = {}
     stream_elements_visited = 0
+    surprise_number = 0
 
-    # We will store the total ocurrences for every word in the sample in this
-    # variable. When a new word is inserted, this counter will be updated and
-    # will compose the 2nd moment estimate.
-    sum_ocurrences = 0 
     start_time = timeit.default_timer()
-    for line_idx, line in enumerate(file_contents):
+    for line_idx, line in enumerate(dataset):
         # TODO(gschardong): Remove this later
         if line_idx > 10000:
             break
 
-        # Splitting a lowercase version of the line by punctuation and
-        # whitespace characters.
-        split_line = re.split('[' + string.punctuation + string.whitespace + ']',
-                              line.lower())
-        split_line = list(filter(None, split_line))
-        chance_to_remove_token = np.random.rand(len(split_line))
+        chance_to_remove_token = np.random.rand(len(line))
 
         # Iterating through the tokens.
-        for token_idx, token in enumerate(split_line):
+        for token_idx, token in enumerate(line):
             # If the number of stream elements visited is less than the sample
             # size, the element is automatically included in the samples
             # dictionary.
@@ -206,23 +217,23 @@ def calc_surprise_number_ams(dataset_filename, sample_size, num_vars):
                     sample_dict[token][count_dict[token]] = 1
                     count_dict[token] = count_dict[token] + 1
             else:
-                if chance_to_remove_token[token_idx] > sample_size / stream_elements_visited:
+                if chance_to_remove_token[token_idx] > (sample_size / stream_elements_visited):
                     # If the random number generator returns a value larger
                     # than sample_size / N, then we must add the new stream
                     # element to our sample. Since our sample is full, we must
                     # choose an element to remove from it. To remove an element,
                     # we choose one uniformly at random, remove it and add the
                     # new element to our sample set.
-                    sum_count_dict = sum(count_dict.values())
+                    probs = [len(v.keys()) / sample_size for v in sample_dict.values()]
                     elem = np.random.choice(a=list(sample_dict.keys()),
-                                            p=[len(v.keys()) / sum_count_dict for _, v in sample_dict.items()],
+                                            p=probs,
                                             replace=False)
                     if len(sample_dict[elem]) == 1:
-                        del(sample_dict[elem])
-                        del(count_dict[elem])
+                        del sample_dict[elem]
+                        del count_dict[elem]
                     else:
                         to_del = np.random.choice(a=list(sample_dict[elem].keys()))
-                        del(to_del)
+                        del sample_dict[elem][to_del]
 
                     # Adding the new element to the sample.
                     if token not in sample_dict:
@@ -233,18 +244,22 @@ def calc_surprise_number_ams(dataset_filename, sample_size, num_vars):
                             sample_dict[token][k] = v + 1
                         sample_dict[token][count_dict[token]] = 1
                         count_dict[token] = count_dict[token] + 1
+                        
+                    #print(sample_dict)
+                    #print(count_dict)
+                    #print('---------------------------------------------------')
 
-                    # Updating the 2nd moment estimate.
-
-            # Calculating the 2nd moment of the sample
-            
+            # Updating the 2nd moment estimate.
+            surprise_number = sum([token_count * (2 * c - 1)
+                                   for d in sample_dict.values()
+                                   for c in d.values()]) / len(sample_dict.keys())
             stream_elements_visited = stream_elements_visited + 1
-            
+
         if (line_idx % 1000) == 0:
-            print("Processed line {}/{}".format(line_idx, len(file_contents)))
+            print("Processed line {}/{}".format(line_idx, len(dataset)))
 
     end_time = timeit.default_timer() - start_time
-    print("End time = {} s".format(end_time))
+    return surprise_number, end_time if measure_performance else None
 
 if __name__ == '__main__':
     main()
