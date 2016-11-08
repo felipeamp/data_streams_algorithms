@@ -27,11 +27,11 @@ def main():
     else:
         print('Dataset locally present.')
 
-    #exact_sn = calc_surprise_number_exact(dataset_filename)
+    exact_sn = calc_surprise_number_exact(dataset_filename, True)
     ans_sn = calc_surprise_number_ams(dataset_filename, 100)
 
-    #print('Surprise number (exact method) = {}'.format(exact_sn))
-    #print('Surprise numbers estimated using the ANS algorithm.')
+    print('Surprise number (exact method) = {}'.format(exact_sn))
+    print('Surprise numbers estimated using the ANS algorithm.')
     #for sn in ans_sn:
     #    print('Surprise number using {} of the values as variables = {}'.format(sn[1]))
     #for sn in ans_sn:
@@ -80,26 +80,6 @@ def get_word_count_dict(dataset_filename):
     word_dict -- A dictionary with the dataset's tokens as keys and their number
     of ocurrences as values.
     """
-    pass
-
-def calc_surprise_number_exact(dataset_filename):
-    """
-    This function calculates the exact surprise number of a dataset.
-    The surprise number is defined as the second moment of a set. The exact way
-    to calculate it involves counting the number of occurrences of each i-th
-    element of a dataset (named as m_i), squaring them (m_i^2) and summing the
-    resulting values (sum(m_i^2)). This method is exact, however it is slow,
-    since the whole dataset must be transversed.
-
-    Arguments:
-    dataset_filename -- The full path to the dataset file. This file is expected
-    to be in .zip format.
-
-    Returns:
-    The 2nd moment, a.k.a. surprise number, of the dataset.
-    """
-
-    # Since the file is small, we read it into the memory.
     file_contents = []
     with zipfile.ZipFile(dataset_filename, 'r').open('Norvig.txt', 'r') as file_input:
         file_contents = file_input.readlines()
@@ -114,7 +94,8 @@ def calc_surprise_number_exact(dataset_filename):
         ## Splitting the line by punctuation and whitspace characters, however,
         ## some empty strings are returned, thus the call to the 'filter'
         ## function.
-        split_line = re.split('[' + string.punctuation + string.whitespace + ']', line)
+        split_line = re.split('[' + string.punctuation + string.whitespace + ']',
+                              line.lower())
         split_line = list(filter(None, split_line))
         for token in split_line:
             if token in token_dict:
@@ -122,12 +103,41 @@ def calc_surprise_number_exact(dataset_filename):
             else:
                 token_dict[token] = 1
 
-    # Calculating the surprise number.
+    return token_dict
+
+
+def calc_surprise_number_exact(dataset_filename, measure_performance = False):
+    """
+    This function calculates the exact surprise number of a dataset.
+    The surprise number is defined as the second moment of a set. The exact way
+    to calculate it involves counting the number of occurrences of each i-th
+    element of a dataset (named as m_i), squaring them (m_i^2) and summing the
+    resulting values (sum(m_i^2)). This method is exact, however it is slow,
+    since the whole dataset must be transversed.
+
+    Arguments:
+    dataset_filename -- The full path to the dataset file. This file is expected
+    to be in .zip format.
+
+    measure_performance -- Switch to indicate if the time to calculate the 2nd
+    moment should be measured. If set to True, the resulting time is returned
+    following the surprise number. The default value is False.
+
+    Returns:
+    The 2nd moment, a.k.a. surprise number, of the dataset. And the time it took
+    to calculate the surprise number (if the measure_performance parameter is
+    set to True).
+    """
+    token_dict = get_word_count_dict(dataset_filename)
+    start_time = timeit.default_timer()
+
     surprise_number = 0
     for _, count in token_dict.items():
         surprise_number = surprise_number + count ** 2
 
-    return surprise_number
+    end_time = timeit.default_timer() - start_time
+
+    return surprise_number, end_time if measure_performance else None
 
 def calc_surprise_number_ams(dataset_filename, sample_size, num_vars):
     """
@@ -160,6 +170,10 @@ def calc_surprise_number_ams(dataset_filename, sample_size, num_vars):
     count_dict = {}
     stream_elements_visited = 0
 
+    # We will store the total ocurrences for every word in the sample in this
+    # variable. When a new word is inserted, this counter will be updated and
+    # will compose the 2nd moment estimate.
+    sum_ocurrences = 0 
     start_time = timeit.default_timer()
     for line_idx, line in enumerate(file_contents):
         # TODO(gschardong): Remove this later
@@ -172,6 +186,8 @@ def calc_surprise_number_ams(dataset_filename, sample_size, num_vars):
                               line.lower())
         split_line = list(filter(None, split_line))
         chance_to_remove_token = np.random.rand(len(split_line))
+
+        # Iterating through the tokens.
         for token_idx, token in enumerate(split_line):
             # If the number of stream elements visited is less than the sample
             # size, the element is automatically included in the samples
@@ -208,7 +224,7 @@ def calc_surprise_number_ams(dataset_filename, sample_size, num_vars):
                         to_del = np.random.choice(a=list(sample_dict[elem].keys()))
                         del(to_del)
 
-                    ## Adding the new element to the sample.
+                    # Adding the new element to the sample.
                     if token not in sample_dict:
                         count_dict[token] = 1
                         sample_dict[token] = {0: 1}
@@ -217,6 +233,8 @@ def calc_surprise_number_ams(dataset_filename, sample_size, num_vars):
                             sample_dict[token][k] = v + 1
                         sample_dict[token][count_dict[token]] = 1
                         count_dict[token] = count_dict[token] + 1
+
+                    # Updating the 2nd moment estimate.
 
             # Calculating the 2nd moment of the sample
             
