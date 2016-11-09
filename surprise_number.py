@@ -28,11 +28,11 @@ def main():
 
     dataset = tokenize_dataset(dataset_filename)
 
-    exact_sn = calc_surprise_number_exact(dataset[1:300], True)
-    ans_sn = calc_surprise_number_ams(dataset[1:300], 50, True)
+    exact_sn = calc_surprise_number_exact(dataset[0:100000], True)
+    ans_sn = calc_surprise_number_ams(dataset[0:100000], 10000, True)
 
     print('Surprise number (exact method) = {}'.format(exact_sn))
-    print('Surprise number estimated using the ANS algorithm = {}'.format(ans_sn))
+    print('Surprise number estimated using the AMS algorithm = {}'.format(ans_sn))
     #for sn in ans_sn:
     #    print('Surprise number using {} of the values as variables = {}'.format(sn[1]))
     #for sn in ans_sn:
@@ -183,21 +183,45 @@ def calc_surprise_number_ams(dataset, sample_size, measure_performance=False):
 
     Returns:
     """
-    token_count = sum(get_token_count_dict(dataset)[1].values())
-
     sample_dict = {}
     count_dict = {}
     stream_elements_visited = 0
     surprise_number = 0
 
+    def add_token_to_sample(token):
+        """
+        Helper function to add a new token to the sample data structures.
+
+        Arguments:
+        token -- The new element to be added to the sample.
+        """
+        if token not in count_dict:
+            count_dict[token] = 1
+            sample_dict[token] = {0: 1}
+        else:
+            for k, v in sample_dict[token].items():
+                sample_dict[token][k] = v + 1
+            sample_dict[token][count_dict[token]] = 1
+            count_dict[token] = count_dict[token] + 1
+
+    def del_token_from_sample(token):
+        """
+        Helper function to remove a token from the sample data structures.
+
+        Arguments:
+        token -- The token to be removed.
+        """
+        if len(sample_dict[token]) == 1:
+            del sample_dict[token]
+            del count_dict[token]
+        else:
+            to_del = np.random.choice(a=list(sample_dict[token].keys()))
+            del sample_dict[token][to_del]
+
+
     start_time = timeit.default_timer()
     for line_idx, line in enumerate(dataset):
-        # TODO(gschardong): Remove this later
-        if line_idx > 10000:
-            break
-
         chance_to_remove_token = np.random.rand(len(line))
-
         # Iterating through the tokens.
         for token_idx, token in enumerate(line):
             # If the number of stream elements visited is less than the sample
@@ -208,14 +232,7 @@ def calc_surprise_number_ams(dataset, sample_size, measure_performance=False):
                 # counter dict and the samples dict, else, we add another
                 # counter to the count dict and increment all counters in the
                 # token dict inside the samples dict.
-                if token not in count_dict:
-                    count_dict[token] = 1
-                    sample_dict[token] = {0: 1}
-                else:
-                    for k, v in sample_dict[token].items():
-                        sample_dict[token][k] = v + 1
-                    sample_dict[token][count_dict[token]] = 1
-                    count_dict[token] = count_dict[token] + 1
+                add_token_to_sample(token)
             else:
                 if chance_to_remove_token[token_idx] > (sample_size / stream_elements_visited):
                     # If the random number generator returns a value larger
@@ -228,31 +245,20 @@ def calc_surprise_number_ams(dataset, sample_size, measure_performance=False):
                     elem = np.random.choice(a=list(sample_dict.keys()),
                                             p=probs,
                                             replace=False)
-                    if len(sample_dict[elem]) == 1:
-                        del sample_dict[elem]
-                        del count_dict[elem]
-                    else:
-                        to_del = np.random.choice(a=list(sample_dict[elem].keys()))
-                        del sample_dict[elem][to_del]
+                    del_token_from_sample(elem)
 
                     # Adding the new element to the sample.
-                    if token not in sample_dict:
-                        count_dict[token] = 1
-                        sample_dict[token] = {0: 1}
-                    else:
-                        for k, v in sample_dict[token].items():
-                            sample_dict[token][k] = v + 1
-                        sample_dict[token][count_dict[token]] = 1
-                        count_dict[token] = count_dict[token] + 1
-                        
-                    #print(sample_dict)
-                    #print(count_dict)
-                    #print('---------------------------------------------------')
+                    add_token_to_sample(token)
 
             # Updating the 2nd moment estimate.
-            surprise_number = sum([token_count * (2 * c - 1)
+            num_samples = sample_size
+            if stream_elements_visited < sample_size:
+                num_samples = sum([len(d.keys()) for d in sample_dict.values()])
+
+            surprise_number = sum([stream_elements_visited * (2 * c - 1)
                                    for d in sample_dict.values()
-                                   for c in d.values()]) / len(sample_dict.keys())
+                                   for c in d.values()]) / num_samples
+
             stream_elements_visited = stream_elements_visited + 1
 
         if (line_idx % 1000) == 0:
