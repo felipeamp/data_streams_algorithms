@@ -11,7 +11,10 @@ import re
 import string
 import timeit
 import urllib.request
+from collections import Counter
 import numpy as np
+
+OUTPUT_FILE = os.path.join('outputs', 'output_ams_surprisenumber.txt')
 
 def main():
     """
@@ -27,20 +30,17 @@ def main():
         print('Dataset locally present.')
 
     dataset = tokenize_dataset(dataset_filename)
+    token_dict = get_token_count_dict(dataset)
 
-    exact_sn = calc_surprise_number_exact(dataset[0:100000], True)
-    ans_sn = calc_surprise_number_ams(dataset[0:100000], 10000, True)
+    exact_sn = calc_surprise_number_exact(dataset, True)
+    ams_sn = calc_surprise_number_ams(dataset, 10000, True)
 
-    print('Surprise number (exact method) = {}'.format(exact_sn))
-    print('Surprise number estimated using the AMS algorithm = {}'.format(ans_sn))
-    #for sn in ans_sn:
-    #    print('Surprise number using {} of the values as variables = {}'.format(sn[1]))
-    #for sn in ans_sn:
-    #    perc = sn[0] * 100
-    #    print('Ratio of exact SN and AMS SN using {} of the values as variables = {}'.format(perc, exact_sn / sn[1]))
+    print('Surprise number (exact method) = {}; Processing time = {}'.format(exact_sn[0], exact_sn[1]))
+    print('Surprise number estimated using the AMS algorithm = {}; Total processing time = {}'.format(ams_sn[0], ams_sn[1]))
+    print('Average processing time per sample update (AMS) = {}'.format(ams_sn[1] / sum(token_dict.values())))
 
 
-def download_dataset(url, filename, dataset_path=os.getcwd() + '/datasets'):
+def download_dataset(url, filename, dataset_path=os.path.join(os.getcwd(), 'datasets')):
     """
     This function downloads the input dataset to a local file.
 
@@ -57,7 +57,7 @@ def download_dataset(url, filename, dataset_path=os.getcwd() + '/datasets'):
     dataset_filename -- The full path to the dataset, including its given name.
     """
     downloaded = False
-    dataset_filename = dataset_path + '/' + filename
+    dataset_filename = os.path.join(dataset_path, filename)
     if not os.path.exists(dataset_filename) or not os.path.isfile(dataset_filename):
         print('Downloading dataset.')
         urllib.request.urlretrieve(url=url,
@@ -112,21 +112,14 @@ def get_token_count_dict(dataset):
     returned.
     """
     if len(dataset) == 0:
-        return False, {}
+        return {}
 
     ## Building the word dictionary.
-    token_dict = {}
+    counter = Counter()
     for line in dataset:
-        ## Splitting the line by punctuation and whitspace characters, however,
-        ## some empty strings are returned, thus the call to the 'filter'
-        ## function.
-        for token in line:
-            if token in token_dict:
-                token_dict[token] = token_dict[token] + 1
-            else:
-                token_dict[token] = 1
+        counter.update(line)
 
-    return True, token_dict
+    return dict(counter)
 
 
 def calc_surprise_number_exact(dataset, measure_performance=False):
@@ -152,19 +145,15 @@ def calc_surprise_number_exact(dataset, measure_performance=False):
     be -1 and the measured time will be returned as None, regardless of the
     measure_performance parameter value.
     """
-    success, token_dict = get_token_count_dict(dataset)
-    if not success:
+    token_dict = get_token_count_dict(dataset)
+    if len(token_dict) == 0:
         return -1, None
 
     start_time = timeit.default_timer()
-    
-    surprise_number = 0
-    for _, count in token_dict.items():
-        surprise_number = surprise_number + (count ** 2)
-
+    surprise_number = sum(count ** 2 for count in token_dict.values())
     end_time = timeit.default_timer() - start_time
 
-    return surprise_number, end_time if measure_performance else None
+    return surprise_number, (end_time if measure_performance else None)
 
 def calc_surprise_number_ams(dataset, sample_size, measure_performance=False):
     """
@@ -183,11 +172,6 @@ def calc_surprise_number_ams(dataset, sample_size, measure_performance=False):
 
     Returns:
     """
-    sample_dict = {}
-    count_dict = {}
-    stream_elements_visited = 0
-    surprise_number = 0
-
     def add_token_to_sample(token):
         """
         Helper function to add a new token to the sample data structures.
@@ -199,10 +183,10 @@ def calc_surprise_number_ams(dataset, sample_size, measure_performance=False):
             count_dict[token] = 1
             sample_dict[token] = {0: 1}
         else:
-            for k, v in sample_dict[token].items():
-                sample_dict[token][k] = v + 1
+            for k in sample_dict[token].keys():
+                sample_dict[token][k] += 1
             sample_dict[token][count_dict[token]] = 1
-            count_dict[token] = count_dict[token] + 1
+            count_dict[token] += 1
 
     def del_token_from_sample(token):
         """
@@ -218,6 +202,10 @@ def calc_surprise_number_ams(dataset, sample_size, measure_performance=False):
             to_del = np.random.choice(a=list(sample_dict[token].keys()))
             del sample_dict[token][to_del]
 
+    sample_dict = {}
+    count_dict = {}
+    stream_elements_visited = 0
+    surprise_number_list = []
 
     start_time = timeit.default_timer()
     for line_idx, line in enumerate(dataset):
@@ -241,23 +229,32 @@ def calc_surprise_number_ams(dataset, sample_size, measure_performance=False):
                     # choose an element to remove from it. To remove an element,
                     # we choose one uniformly at random, remove it and add the
                     # new element to our sample set.
-                    probs = [len(v.keys()) / sample_size for v in sample_dict.values()]
-                    elem = np.random.choice(a=list(sample_dict.keys()),
+                    key_probs = [(k, len(v) / sample_size) for k, v in sample_dict.items()]
+                    keys, probs = zip(*key_probs)
+                    elem = np.random.choice(a=keys,
                                             p=probs,
                                             replace=False)
                     del_token_from_sample(elem)
-
                     # Adding the new element to the sample.
                     add_token_to_sample(token)
 
             # Updating the 2nd moment estimate.
             num_samples = sample_size
             if stream_elements_visited < sample_size:
-                num_samples = sum([len(d.keys()) for d in sample_dict.values()])
+                num_samples = sum(len(d) for d in sample_dict.values())
 
-            surprise_number = sum([stream_elements_visited * (2 * c - 1)
-                                   for d in sample_dict.values()
-                                   for c in d.values()]) / num_samples
+            surprise_number = sum((2 * c - 1)
+                                  for d in sample_dict.values()
+                                  for c in d.values()) * stream_elements_visited / num_samples
+
+            surprise_number_list.append(surprise_number)
+            if len(surprise_number_list) >= 100000:
+                # Save buffer to file
+                if OUTPUT_FILE is not None:
+                    with open(OUTPUT_FILE, 'a') as file_out:
+                        for item in surprise_number_list:
+                            file_out.write('{}\n'.format(item))
+                    surprise_number_list = []
 
             stream_elements_visited = stream_elements_visited + 1
 
@@ -265,7 +262,7 @@ def calc_surprise_number_ams(dataset, sample_size, measure_performance=False):
             print("Processed line {}/{}".format(line_idx, len(dataset)))
 
     end_time = timeit.default_timer() - start_time
-    return surprise_number, end_time if measure_performance else None
+    return surprise_number_list[-1], end_time if measure_performance else None
 
 if __name__ == '__main__':
     main()
