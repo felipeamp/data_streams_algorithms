@@ -9,13 +9,19 @@ import sys
 
 
 DATASET_PATH = os.path.join('datasets', 'norvig.txt.gz')
-num_distinct_words = 0
 
 def main():
+    num_distinct_words = 0
+    words_dict = {}
+    
     try:
         with gzip.open(DATASET_PATH, 'r') as fin:
             for line in fin:
-                line = line.decode('ascii')
+                words = line.decode('ascii').split()
+                for word in words:
+                    if not word in words_dict:
+                        words_dict[word] = 1
+                        num_distinct_words += 1 
     finally:
         print("Number of distinct words: %d" % (num_distinct_words))
 
