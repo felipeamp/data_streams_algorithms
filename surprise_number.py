@@ -14,7 +14,8 @@ import urllib.request
 from collections import Counter
 import numpy as np
 
-OUTPUT_FILE = os.path.join('outputs', 'output_ams_surprisenumber.txt')
+OUTPUT_FILE = os.path.join('outputs', 'output_ams_surprisenumber_run_3.txt')
+NUM_SAMPLES = 10
 
 def main():
     """
@@ -33,7 +34,7 @@ def main():
     token_dict = get_token_count_dict(dataset)
 
     exact_sn = calc_surprise_number_exact(dataset, True)
-    ams_sn = calc_surprise_number_ams(dataset, 10000, True)
+    ams_sn = calc_surprise_number_ams(dataset, NUM_SAMPLES, True)
 
     print('Surprise number (exact method) = {}; Processing time = {}'.format(exact_sn[0], exact_sn[1]))
     print('Surprise number estimated using the AMS algorithm = {}; Total processing time = {}'.format(ams_sn[0], ams_sn[1]))
