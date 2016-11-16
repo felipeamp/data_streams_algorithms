@@ -1,0 +1,36 @@
+Number of distinct words with exact method: 75161
+Time spent to calculate: 7 seconds
+
+
+Number of distinct words with 1 hash function(s): 29383
+Time spent to calculate: 22 seconds
+
+
+Number of distinct words with 2 hash function(s): 74066
+Time spent to calculate: 33 seconds
+
+
+Number of distinct words with 5 hash function(s): 142722
+Time spent to calculate: 66 seconds
+
+
+Number of distinct words with 10 hash function(s): 115994
+Time spent to calculate: 118 seconds
+
+
+Number of distinct words with 20 hash function(s): 80416
+Time spent to calculate: 227 seconds
+
+
+Number of distinct words with 30 hash function(s): 89201
+Time spent to calculate: 339 seconds
+
+
+Number of distinct words with 40 hash function(s): 115609
+Time spent to calculate: 445 seconds
+
+
+Number of distinct words with 50 hash function(s): 88442
+Time spent to calculate: 547 seconds
+
+
