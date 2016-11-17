@@ -1,0 +1,4 @@
+Number of samples = 100
+Exact algorithm processing time = 0.007863508071750402
+AMS total processing time = 1971.3104203611147
+Average processing time per sample update (AMS) = 0.00011049639092775866
