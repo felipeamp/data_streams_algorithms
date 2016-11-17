@@ -96,3 +96,6 @@ datasets/norvig*
 .project
 .pydevproject
 .settings/
+
+# AMS output files
+output_ams*
