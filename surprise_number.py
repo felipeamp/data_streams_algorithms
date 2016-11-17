@@ -14,8 +14,10 @@ import urllib.request
 from collections import Counter
 import numpy as np
 
-OUTPUT_FILE = os.path.join('outputs', 'output_ams_surprisenumber_run_3.txt')
-NUM_SAMPLES = 10
+run_number = 1
+OUTPUT_FILE = os.path.join('outputs', 'output_ams_surprisenumber_run_' + str(run_number) + '.txt')
+BENCHMARK_FILE = os.path.join('outputs', 'benchmark_ams_surprisenumber_run_' + str(run_number) + '.txt')
+NUM_SAMPLES = 10000
 
 def main():
     """
@@ -35,6 +37,12 @@ def main():
 
     exact_sn = calc_surprise_number_exact(dataset, True)
     ams_sn = calc_surprise_number_ams(dataset, NUM_SAMPLES, True)
+
+    with open(BENCHMARK_FILE, 'w') as benchmark_out:
+        benchmark_out.write('Number of samples = {}\n'.format(NUM_SAMPLES))
+        benchmark_out.write('Exact algorithm processing time = {}\n'.format(exact_sn[1]))
+        benchmark_out.write('AMS total processing time = {}\n'.format(ams_sn[1]))
+        benchmark_out.write('Average processing time per sample update (AMS) = {}\n'.format(ams_sn[1] / sum(token_dict.values())))
 
     print('Surprise number (exact method) = {}; Processing time = {}'.format(exact_sn[0], exact_sn[1]))
     print('Surprise number estimated using the AMS algorithm = {}; Total processing time = {}'.format(ams_sn[0], ams_sn[1]))
