@@ -14,10 +14,10 @@ import urllib.request
 from collections import Counter
 import numpy as np
 
-run_number = 1
+run_number = 4
 OUTPUT_FILE = os.path.join('outputs', 'output_ams_surprisenumber_run_' + str(run_number) + '.txt')
-BENCHMARK_FILE = os.path.join('outputs', 'benchmark_ams_surprisenumber_run_' + str(run_number) + '.txt')
-NUM_SAMPLES = 10000
+BENCHMARK_FILE = os.path.join('outputs', 'benchmark_ams_surprisenumber.csv')
+NUM_SAMPLES = 10 ** run_number
 
 def main():
     """
@@ -38,15 +38,27 @@ def main():
     exact_sn = calc_surprise_number_exact(dataset, True)
     ams_sn = calc_surprise_number_ams(dataset, NUM_SAMPLES, True)
 
-    with open(BENCHMARK_FILE, 'w') as benchmark_out:
-        benchmark_out.write('Number of samples = {}\n'.format(NUM_SAMPLES))
-        benchmark_out.write('Exact algorithm processing time = {}\n'.format(exact_sn[1]))
-        benchmark_out.write('AMS total processing time = {}\n'.format(ams_sn[1]))
-        benchmark_out.write('Average processing time per sample update (AMS) = {}\n'.format(ams_sn[1] / sum(token_dict.values())))
+    sn_data = '{},{},{},{},{},{}\n'.format(NUM_SAMPLES,
+                                           exact_sn[0],
+                                           exact_sn[1],
+                                           ams_sn[0],
+                                           ams_sn[1],
+                                           ams_sn[1] / ams_sn[2])
+
+    if not os.path.exists(BENCHMARK_FILE):
+        with open(BENCHMARK_FILE, 'w') as benchmark_out:
+            header = ['Num.Samples', 'Exact.SN', 'Exact.Proc.time', 'AMS.SN', 'AMS.Proc.Time', 'AMS.Avg.Proc.Time']
+            benchmark_out.write(','.join(header))
+            benchmark_out.write('\n')
+            benchmark_out.write(sn_data)
+    else:
+        with open(BENCHMARK_FILE, 'a+') as benchmark_out:
+            benchmark_out.write(sn_data)
+        pass
 
     print('Surprise number (exact method) = {}; Processing time = {}'.format(exact_sn[0], exact_sn[1]))
     print('Surprise number estimated using the AMS algorithm = {}; Total processing time = {}'.format(ams_sn[0], ams_sn[1]))
-    print('Average processing time per sample update (AMS) = {}'.format(ams_sn[1] / sum(token_dict.values())))
+    print('Average processing time per sample update (AMS) = {}'.format(ams_sn[1] / ams_sn[2]))
 
 
 def download_dataset(url, filename, dataset_path=os.path.join(os.getcwd(), 'datasets')):
@@ -215,6 +227,7 @@ def calc_surprise_number_ams(dataset, sample_size, measure_performance=False):
     count_dict = {}
     stream_elements_visited = 0
     surprise_number_list = []
+    number_updates = 0
 
     start_time = timeit.default_timer()
     for line_idx, line in enumerate(dataset):
@@ -231,7 +244,7 @@ def calc_surprise_number_ams(dataset, sample_size, measure_performance=False):
                 # token dict inside the samples dict.
                 add_token_to_sample(token)
             else:
-                if chance_to_remove_token[token_idx] > (sample_size / stream_elements_visited):
+                if chance_to_remove_token[token_idx] < (sample_size / stream_elements_visited):
                     # If the random number generator returns a value larger
                     # than sample_size / N, then we must add the new stream
                     # element to our sample. Since our sample is full, we must
@@ -247,23 +260,17 @@ def calc_surprise_number_ams(dataset, sample_size, measure_performance=False):
                     # Adding the new element to the sample.
                     add_token_to_sample(token)
 
-            # Updating the 2nd moment estimate.
-            num_samples = sample_size
-            if stream_elements_visited < sample_size:
-                num_samples = sum(len(d) for d in sample_dict.values())
+                    # Updating the 2nd moment estimate.
+                    num_samples = sample_size
+                    if stream_elements_visited < sample_size:
+                        num_samples = sum(len(d) for d in sample_dict.values())
 
-            surprise_number = sum((2 * c - 1)
-                                  for d in sample_dict.values()
-                                  for c in d.values()) * stream_elements_visited / num_samples
+                    surprise_number = sum((2 * c - 1)
+                                          for d in sample_dict.values()
+                                          for c in d.values()) * stream_elements_visited / num_samples
 
-            surprise_number_list.append(surprise_number)
-            if len(surprise_number_list) >= 100000:
-                # Save buffer to file
-                if OUTPUT_FILE is not None:
-                    with open(OUTPUT_FILE, 'a') as file_out:
-                        for item in surprise_number_list:
-                            file_out.write('{}\n'.format(item))
-                    surprise_number_list = []
+                    surprise_number_list.append(surprise_number)
+                    number_updates += 1
 
             stream_elements_visited = stream_elements_visited + 1
 
@@ -271,7 +278,14 @@ def calc_surprise_number_ams(dataset, sample_size, measure_performance=False):
             print("Processed line {}/{}".format(line_idx, len(dataset)))
 
     end_time = timeit.default_timer() - start_time
-    return surprise_number_list[-1], end_time if measure_performance else None
+
+    # Save buffer to file
+    if OUTPUT_FILE is not None:
+        with open(OUTPUT_FILE, 'a') as file_out:
+            for item in surprise_number_list:
+                file_out.write('{}\n'.format(item))
+
+    return surprise_number_list[-1], end_time if measure_performance else None, number_updates
 
 if __name__ == '__main__':
     main()
