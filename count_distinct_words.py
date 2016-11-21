@@ -9,6 +9,8 @@ import sys
 import random
 import numpy
 import timeit
+import string
+import re
 
 
 DATASET_PATH = os.path.join('datasets', 'norvig.txt.gz')
@@ -40,9 +42,9 @@ def count_distinct_words_with_hash_functions(num_hash_functions):
 
     with gzip.open(DATASET_PATH, 'r') as fin:
         for line in fin:
-            words = line.decode('ascii').split()
+            words = re.split('[' + string.punctuation + string.whitespace + ']', line.decode('ascii').lower())
+            words = list(filter(None, words))
             for word in words:
-                word = word.lower()
                 for i in range(len(h_array)):
                     num = h_array[i].hash(word)
 
@@ -60,9 +62,9 @@ def count_distinct_words_with_exact_method():
     
     with gzip.open(DATASET_PATH, 'r') as fin:
         for line in fin:
-            words = line.decode('ascii').split()
+            words = re.split('[' + string.punctuation + string.whitespace + ']', line.decode('ascii').lower())
+            words = list(filter(None, words))
             for word in words:
-                word = word.lower()
                 if not word in words_dict:
                     words_dict[word] = 1
                     num_distinct_words += 1 
